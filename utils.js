@@ -46,12 +46,39 @@ export async function getEnvFromBundles(urls) {
   const results = await Promise.all(
     urls.map(async (url) => {
       const jsText = await fetchResponseAsText(url);
-      const envs = jsText.match(/REACT_APP[\w]+:[\S]+?('|"|$)/g);
+
+      const codeUrls = [];
+      const urlWordMatchers = ["sentry", "mixpanel", "clevertap"];
+
+      for (const word of urlWordMatchers) {
+        const urlWordMatch = jsText.match(
+          new RegExp(`https?:\/\/[^"\\s]*${word}[^"\\s]*`)
+        );
+        if (urlWordMatch) {
+          codeUrls.push({
+            [word]: urlWordMatch,
+            url,
+          });
+        }
+      }
+
+      const envs = []
+        .concat(jsText.match(/REACT_APP[\w]+:[\S]+?('|"|$)/g))
+        .filter(Boolean);
+      let envsData = {};
       if (envs) {
-        const data = envs
-          .map((envStr) => envStr.split(/:(.*)/s).slice(0, 2))
-          .map(([k, v]) => [k, v.replace(/"/g, "")]);
-        return Object.fromEntries(data);
+        envsData = Object.fromEntries(
+          envs
+            .map((envStr) => envStr.split(/:(.*)/s).slice(0, 2))
+            .map(([k, v]) => [k, v.replace(/"/g, "")])
+        );
+      }
+
+      if (Object.keys(envsData).length || codeUrls.length) {
+        return {
+          envsData,
+          codeUrls,
+        };
       }
     })
   );
